@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,7 +16,7 @@ var upgrader = websocket.Upgrader{
 }
 
 var clients = make(map[*websocket.Conn]bool) // Connected clients
-var broadcast = make(chan []byte) // Channel to broadcast messages
+var broadcast = make(chan []byte)            // Channel to broadcast messages
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil) // Upgrade HTTP connection to WebSocket
@@ -41,7 +42,15 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 }
 
 func broadcastUserCount() {
-
+	count := len(clients)
+	msg := map[string]interface{}{
+		"type":  "user_count",
+		"count": count,
+	}
+	data, _ := json.Marshal(msg) // Convert message to JSON
+	for client := range clients {
+		client.WriteMessage(websocket.TextMessage, data) // Send user count to each client
+	}
 }
 
 func handleMessages() {

@@ -9,6 +9,11 @@ interface DrawingState {
   startY: number;
 }
 
+interface WhiteBoardProps {
+  setOnlineCount: React.Dispatch<React.SetStateAction<number>>;
+}
+
+
 interface Message {
   id: string;
   text: string;
@@ -21,7 +26,7 @@ type BrushStyle = 'pen' | 'highlighter' | 'eraser';
 type ShapeType = 'rectangle' | 'circle' | 'triangle';
 type DrawingMode = 'brush' | 'shape';
 
-export const Whiteboard: React.FC = () => {
+export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const highlighterCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -176,18 +181,21 @@ export const Whiteboard: React.FC = () => {
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
 
-      if (data.type !== 'draw') return;
+      if (data.type === 'draw') {
+        const canvas = canvasRef.current;
+        const ctx = canvas?.getContext('2d');
+        if (!ctx) return;
 
-      const canvas = canvasRef.current;
-      const ctx = canvas?.getContext('2d');
-      if (!ctx) return;
-
-      ctx.strokeStyle = data.color;
-      ctx.lineWidth = data.size;
-      ctx.beginPath();
-      ctx.moveTo(data.x1, data.y1);
-      ctx.lineTo(data.x2, data.y2);
-      ctx.stroke();
+        ctx.strokeStyle = data.color;
+        ctx.lineWidth = data.size;
+        ctx.beginPath();
+        ctx.moveTo(data.x1, data.y1);
+        ctx.lineTo(data.x2, data.y2);
+        ctx.stroke();
+      }
+      if (data.type === 'user_count') {
+        setOnlineCount(data.count);
+      }
     };
 
     socket.onclose = () => {

@@ -2,17 +2,12 @@ import React from 'react';
 import { UserPresence } from './components/UserPresence';
 import { Whiteboard } from './components/Whiteboard';
 
-const dummyUsers = [
-  { id: '1', name: 'Alice Johnson', color: '#3B82F6', isOnline: true },
-  { id: '2', name: 'Bob Smith', color: '#EF4444', isOnline: true },
-  { id: '3', name: 'Carol Davis', color: '#10B981', isOnline: true },
-  { id: '4', name: 'David Wilson', color: '#F59E0B', isOnline: false },
-  { id: '5', name: 'Eve Brown', color: '#8B5CF6', isOnline: true },
-  { id: '6', name: 'Frank Miller', color: '#EC4899', isOnline: true },
-];
 
 function App() {
+  const [onlineCount, setOnlineCount] = React.useState(1); // Start with 1 for the current user
+  
   return (
+    
     <div className="min-h-screen bg-gray-50" style={{ backgroundColor: '#f8f9fa' }}>
       {/* Header */}
       <header className="bg-white border-b border-gray-200 shadow-sm">
@@ -69,7 +64,7 @@ function App() {
 
             {/* Right Section */}
             <div className="flex items-center">
-              <UserPresence users={dummyUsers} />
+              <UserPresence onlineCount={onlineCount} />
             </div>
           </div>
         </div>
@@ -77,7 +72,7 @@ function App() {
 
       {/* Main Content */}
       <main className="h-[calc(100vh-89px)]">
-        <Whiteboard />
+        <Whiteboard setOnlineCount={setOnlineCount} />
       </main>
     </div>
   );
