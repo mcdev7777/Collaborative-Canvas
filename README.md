@@ -9,7 +9,7 @@ Designed to enable seamless visual collaboration between multiple users — perf
 
 ## Live Demo
 
- [https://yourcustomdomain.com](https://collaborative-canvas-25764.firebaseapp.com/)
+ [Collaborative Canvas Demo](https://collaborative-canvas-25764.firebaseapp.com/)
 
 ---
 
