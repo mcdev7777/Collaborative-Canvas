@@ -1,13 +1,20 @@
 version: '3.9'
 
 services:
-  server:
+  redis:
+      image: redis:7
+      container_name: redis
+      ports:
+        - "6379:6379"
+  go-server:
     build:
       context: ./server
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
     container_name: go-server
+    depends_on:
+      - redis
   
   frontend:
     build:
@@ -16,3 +23,5 @@ services:
     ports:
       - "3000:80"
     container_name: react-frontend
+    depends_on:
+      - go-server
