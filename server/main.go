@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -240,9 +242,20 @@ func handleMessages() {
 }
 
 func main() {
-	rdb = redis.NewClient(&redis.Options{
-		Addr: "redis:6379",
-	})
+	// Load environment variables from .env file if not in production
+	if os.Getenv(("GO_ENV")) != "production" {
+		if err := godotenv.Load(); err != nil {
+			log.Println("Error loading .env file, using default values")
+		}
+	}
+	// Initialize Redis client
+	redisURL := os.Getenv("REDIS_URL")
+	opt, err := redis.ParseURL(redisURL)
+	if err != nil {
+		log.Fatal("Error parsing Redis URL:", err)
+	}
+	// Create a new Redis client
+	rdb = redis.NewClient(opt)
 	pong, err := rdb.Ping(ctx).Result()
 	if err != nil {
 		log.Fatal("Could not connect to Redis:", err)
@@ -252,8 +265,13 @@ func main() {
 	http.HandleFunc("/ws", handleConnections)
 	go handleMessages()
 
-	fmt.Println("Server started on :8080")
-	err = http.ListenAndServe(":8080", nil)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Default port
+	}
+
+	fmt.Println("Server started on port", port)
+	err = http.ListenAndServe("0.0.0.0:"+port, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe:", err)
 	}

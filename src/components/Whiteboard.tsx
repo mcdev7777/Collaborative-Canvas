@@ -44,7 +44,7 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ setOnlineCount }) => {
   }, []);
 
   useEffect(() => {
-    const socket = new WebSocket('ws://localhost:8080/ws');
+    const socket = new WebSocket('wss://canvas-backend-955998363646.us-central1.run.app/ws');
     socketRef.current = socket;
 
     socket.onopen = () => {
