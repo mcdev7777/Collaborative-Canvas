@@ -7,10 +7,15 @@ function App() {
   const [onlineCount, setOnlineCount] = React.useState(1); // Start with 1 for the current user
   
   return (
-    
-    <div className="min-h-screen bg-gray-50" style={{ backgroundColor: '#f8f9fa' }}>
+    <div className="relative min-h-screen flex flex-col h-full p-4 gap-4">
+      {/* Layered Background */}
+      <div className="absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute top-[-20%] left-[-10%] w-[400px] h-[400px] max-w-[100vw] max-h-[100vh] bg-indigo-200 rounded-full filter blur-3xl opacity-50" />
+        <div className="absolute bottom-[-15%] right-[-10%] w-[500px] h-[500px] max-w-[100vw] max-h-[100vh] bg-pink-200 rounded-full filter blur-2xl opacity-40" />
+        <div className="absolute top-[30%] left-[30%] w-[300px] h-[300px] max-w-[100vw] max-h-[100vh] bg-blue-200 rounded-full filter blur-2xl opacity-30 animate-pulse" />
+      </div>
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm">
+      <header className="bg-[#0D1120] border-b border-gray-800 shadow-sm rounded-xl">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             {/* Logo and Title */}
@@ -53,10 +58,10 @@ function App() {
               </div>
               
               <div>
-                <h1 className="text-xl font-bold text-gray-900 leading-tight">
+                <h1 className="text-xl font-bold text-white-900 leading-tight">
                   WhiteBoard
                 </h1>
-                <p className="text-xs text-gray-500 font-medium">
+                <p className="text-xs text-gray-400 font-medium">
                   Collaborative Drawing
                 </p>
               </div>
@@ -71,7 +76,7 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <main className="h-[calc(100vh-89px)]">
+      <main className="flex-grow min-h-0 h-[calc(100vh-89px)] overflow-hidden">
         <Whiteboard setOnlineCount={setOnlineCount} />
       </main>
     </div>

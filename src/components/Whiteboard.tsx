@@ -412,7 +412,7 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
   return (
     <div className="flex flex-col h-full p-4 gap-4">
       {/* Enhanced Drawing Controls - Floating Toolbar */}
-      <div className="sticky top-0 z-10 bg-white rounded-lg shadow-md border border-gray-200 p-4">
+      <div className="sticky top-0 z-10 bg-[#101521] rounded-lg shadow-md border border-gray-800 p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-6">
             {/* Brush Style Selector */}
@@ -515,11 +515,11 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
               </button>
             </div>
 
-            {/* Enhanced Color Picker */}
+            {/* Color Picker */}
             <div className="relative">
               <button
                 onClick={() => setShowColorPicker(!showColorPicker)}
-                className="flex items-center space-x-2 p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
+                className="flex items-center space-x-2 p-2 text-gray-300 hover:bg-gray-100 rounded-lg border border-slate-600 transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
                 title="Choose color"
                 disabled={brushStyle === 'eraser'}
               >
@@ -606,7 +606,7 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
           {/* Clear Canvas Button */}
           <button
             onClick={clearCanvas}
-            className="flex items-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 hover:shadow-md"
+            className="flex items-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg border border-slate-600 transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 hover:shadow-md"
             title="Clear entire canvas"
           >
             <RotateCcw size={16} />
@@ -638,11 +638,11 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
         </div>
 
         {/* Chat Area */}
-        <div className="w-full lg:w-80 flex flex-col bg-white rounded-lg shadow-sm border border-gray-200" style={{ backgroundColor: '#f1f3f5', borderLeft: '1px solid #dee2e6' }}>
+        <div className="w-full lg:w-80 flex flex-col bg-white rounded-lg shadow-sm border border-gray-200" style={{ backgroundColor: '#1a1f2a', borderLeft: '1px solid #dee2e6' }}>
           {/* Chat Header */}
-          <div className="p-4 border-b border-gray-200 bg-white rounded-t-lg">
-            <h3 className="text-lg font-semibold text-gray-900">Team Chat</h3>
-            <p className="text-sm text-gray-500">{messages.length} messages</p>
+          <div className="p-4 border-b border-gray-800 bg-[#101521] rounded-t-lg">
+            <h3 className="text-lg font-semibold text-white-900">Team Chat</h3>
+            <p className="text-sm text-gray-400">{messages.length} messages</p>
           </div>
 
           {/* Messages */}
@@ -670,7 +670,7 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
           </div>
 
           {/* Message Input */}
-          <div className="p-4 border-t border-gray-200 bg-white rounded-b-lg">
+          <div className="p-4 border-t border-gray-800 bg-[#101521] rounded-b-lg">
             <div className="flex space-x-2">
               <input
                 type="text"
