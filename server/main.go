@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -15,8 +17,15 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-var clients = make(map[*websocket.Conn]bool) // Connected clients
-var broadcast = make(chan []byte)            // Channel to broadcast messages
+var clients = make(map[*websocket.Conn]int)         // Connected clients
+var clientColors = make(map[*websocket.Conn]string) // Colors for each client
+var userCount = 0                                   // Total number of connected users
+var broadcast = make(chan []byte)                   // Channel to broadcast messages
+var mu sync.Mutex                                   // Mutex to protect shared data
+
+var colors = []string{
+	"#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16",
+}
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil) // Upgrade HTTP connection to WebSocket
@@ -26,18 +35,39 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close() // Ensure the connection is closed when the function exits
 
-	clients[ws] = true // Add new client to the map
-
-	broadcastUserCount() // Broadcast the initial user count
+	mu.Lock()
+	userCount++                                      // Increment user count
+	clients[ws] = len(clients) + 1                   // Add new client to the map
+	clientColors[ws] = colors[userCount%len(colors)] // Assign a color to the client
+	broadcastUserCount()                             // Broadcast the initial user count
+	mu.Unlock()
 
 	for {
 		_, msg, err := ws.ReadMessage() // Read message from client
 		if err != nil {
 			log.Println("Error reading message:", err)
-			delete(clients, ws) // Remove client if there's an error
+			mu.Lock()
+			delete(clients, ws)      // Remove client if there's an error
+			delete(clientColors, ws) // Remove client's color
+			broadcastUserCount()     // Broadcast updated user count
+			mu.Unlock()
 			break
 		}
-		broadcast <- msg // Broadcast the message to all clients
+		var payload map[string]interface{}
+		err = json.Unmarshal(msg, &payload) // Unmarshal the message into a map
+		if err != nil {
+			log.Println("Invalid JSON payload:", err)
+			continue
+		}
+
+		if payload["type"] == "chat" {
+			payload["username"] = fmt.Sprintf("User %d", clients[ws]) // Default username if not provided
+			payload["userColor"] = clientColors[ws]                   // Get the client's color
+			payload["timestamp"] = time.Now().UnixMilli()             // Add timestamp
+			msg, _ = json.Marshal(payload)                            // Convert payload to JSON
+		}
+
+		broadcast <- msg // Send the message to the broadcast channel
 	}
 }
 
@@ -62,9 +92,17 @@ func handleMessages() {
 				log.Println("Error writing message:", err)
 				client.Close()          // Close the connection if there's an error
 				delete(clients, client) // Remove the client from the map
+				mu.Lock()
+				delete(clientColors, client) // Remove client's color
+				broadcastUserCount()         // Broadcast updated user count
+				mu.Unlock()
 			}
 		}
 	}
+}
+
+func jsonNow() int64 {
+	return time.Now().Unix()
 }
 
 func main() {

@@ -54,31 +54,8 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
   const [drawingMode, setDrawingMode] = useState<DrawingMode>('brush');
   
   // Chat state
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: 'Welcome to the collaborative whiteboard!',
-      username: 'Alice Johnson',
-      userColor: '#3B82F6',
-      timestamp: new Date(Date.now() - 5 * 60 * 1000),
-    },
-    {
-      id: '2',
-      text: 'Great! Let\'s start brainstorming ideas.',
-      username: 'Bob Smith',
-      userColor: '#EF4444',
-      timestamp: new Date(Date.now() - 3 * 60 * 1000),
-    },
-    {
-      id: '3',
-      text: 'I\'ll start drawing the main concept on the board.',
-      username: 'Carol Davis',
-      userColor: '#10B981',
-      timestamp: new Date(Date.now() - 1 * 60 * 1000),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const currentUser = { name: 'You', color: '#8B5CF6' };
 
   // Expanded color palette with more options
   const presetColors = [
@@ -195,6 +172,18 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
       }
       if (data.type === 'user_count') {
         setOnlineCount(data.count);
+      }
+      if (data.type === 'chat'){
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now().toString(),
+            text: data.text,
+            username: data.username,
+            userColor: data.userColor,
+            timestamp: new Date(data.timestamp),
+          },
+        ]);
       }
     };
 
@@ -424,18 +413,14 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
   }, []);
 
   const sendMessage = useCallback(() => {
-    if (newMessage.trim()) {
-      const message: Message = {
-        id: Date.now().toString(),
+    if (newMessage.trim() && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({
+        type: 'chat',
         text: newMessage.trim(),
-        username: currentUser.name,
-        userColor: currentUser.color,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, message]);
+      }));
       setNewMessage('');
     }
-  }, [newMessage, currentUser]);
+  }, [newMessage]);
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -703,7 +688,7 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-64 lg:max-h-none scrollbar-thin">
             {messages.map((message) => (
-              <div key={message.id} className="flex flex-col space-y-1 hover:bg-gray-100 rounded-lg p-2 -m-2 transition-colors duration-200">
+              <div key={message.id} className="flex flex-col space-y-1 rounded-lg p-2 border border-black bg-white shadow-sm">
                 <div className="flex items-center space-x-2">
                   <div
                     className="w-3 h-3 rounded-full"
