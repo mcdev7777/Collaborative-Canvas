@@ -1,5 +1,9 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Palette, Minus, Plus, RotateCcw, Send, Pen, Highlighter, Eraser, Square, Circle, Triangle, ChevronDown, Pipette } from 'lucide-react';
+import { 
+  Palette, Minus, Plus, RotateCcw, Send, Pen, Highlighter, Eraser, Square, Circle, Triangle, 
+  ChevronDown, Pipette, Type, Move, Undo, Redo, ZoomIn, ZoomOut, Download, Upload, 
+  Minus as LineIcon, Copy, Trash2
+} from 'lucide-react';
 
 interface DrawingState {
   isDrawing: boolean;
@@ -17,16 +21,27 @@ interface Message {
   timestamp: Date;
 }
 
+interface TextElement {
+  id: string;
+  x: number;
+  y: number;
+  text: string;
+  color: string;
+  size: number;
+}
+
 type BrushStyle = 'pen' | 'highlighter' | 'eraser';
-type ShapeType = 'rectangle' | 'circle' | 'triangle';
-type DrawingMode = 'brush' | 'shape';
+type ShapeType = 'rectangle' | 'circle' | 'triangle' | 'line';
+type DrawingMode = 'brush' | 'shape' | 'text' | 'select';
 
 export const Whiteboard: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const highlighterCanvasRef = useRef<HTMLCanvasElement>(null);
+  const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const colorInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [drawingState, setDrawingState] = useState<DrawingState>({
     isDrawing: false,
@@ -41,11 +56,21 @@ export const Whiteboard: React.FC = () => {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showBrushDropdown, setShowBrushDropdown] = useState(false);
   const [showShapeDropdown, setShowShapeDropdown] = useState(false);
+  const [showToolsDropdown, setShowToolsDropdown] = useState(false);
   
   // Drawing tool states
   const [brushStyle, setBrushStyle] = useState<BrushStyle>('pen');
   const [selectedShape, setSelectedShape] = useState<ShapeType>('rectangle');
   const [drawingMode, setDrawingMode] = useState<DrawingMode>('brush');
+  
+  // New tool states
+  const [zoom, setZoom] = useState(1);
+  const [textElements, setTextElements] = useState<TextElement[]>([]);
+  const [isAddingText, setIsAddingText] = useState(false);
+  const [textInput, setTextInput] = useState('');
+  const [textPosition, setTextPosition] = useState({ x: 0, y: 0 });
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyStep, setHistoryStep] = useState(-1);
   
   // Chat state
   const [messages, setMessages] = useState<Message[]>([
@@ -103,14 +128,37 @@ export const Whiteboard: React.FC = () => {
     { id: 'rectangle', name: 'Rectangle', icon: Square },
     { id: 'circle', name: 'Circle', icon: Circle },
     { id: 'triangle', name: 'Triangle', icon: Triangle },
+    { id: 'line', name: 'Line', icon: LineIcon },
   ];
+
+  const additionalTools = [
+    { id: 'text', name: 'Text Tool', icon: Type },
+    { id: 'select', name: 'Select & Move', icon: Move },
+  ];
+
+  // Save canvas state to history
+  const saveToHistory = useCallback(() => {
+    const canvas = canvasRef.current;
+    const highlighterCanvas = highlighterCanvasRef.current;
+    if (!canvas || !highlighterCanvas) return;
+
+    const mainData = canvas.toDataURL();
+    const highlighterData = highlighterCanvas.toDataURL();
+    const state = JSON.stringify({ main: mainData, highlighter: highlighterData, textElements });
+    
+    const newHistory = history.slice(0, historyStep + 1);
+    newHistory.push(state);
+    setHistory(newHistory);
+    setHistoryStep(newHistory.length - 1);
+  }, [history, historyStep, textElements]);
 
   // Initialize canvas
   const initializeCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     const previewCanvas = previewCanvasRef.current;
     const highlighterCanvas = highlighterCanvasRef.current;
-    if (!canvas || !previewCanvas || !highlighterCanvas) return;
+    const textCanvas = textCanvasRef.current;
+    if (!canvas || !previewCanvas || !highlighterCanvas || !textCanvas) return;
 
     // Setup canvas dimensions
     const rect = canvas.getBoundingClientRect();
@@ -118,7 +166,7 @@ export const Whiteboard: React.FC = () => {
     const height = rect.height * 2;
     
     // Set dimensions for all canvases
-    [canvas, previewCanvas, highlighterCanvas].forEach(c => {
+    [canvas, previewCanvas, highlighterCanvas, textCanvas].forEach(c => {
       c.width = width;
       c.height = height;
     });
@@ -127,11 +175,12 @@ export const Whiteboard: React.FC = () => {
     const ctx = canvas.getContext('2d');
     const previewCtx = previewCanvas.getContext('2d');
     const highlighterCtx = highlighterCanvas.getContext('2d');
+    const textCtx = textCanvas.getContext('2d');
     
-    if (!ctx || !previewCtx || !highlighterCtx) return;
+    if (!ctx || !previewCtx || !highlighterCtx || !textCtx) return;
 
     // Configure all contexts
-    [ctx, previewCtx, highlighterCtx].forEach(context => {
+    [ctx, previewCtx, highlighterCtx, textCtx].forEach(context => {
       context.scale(2, 2);
       context.lineCap = 'round';
       context.lineJoin = 'round';
@@ -140,7 +189,12 @@ export const Whiteboard: React.FC = () => {
     // Set white background
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }, []);
+    
+    // Save initial state
+    if (history.length === 0) {
+      saveToHistory();
+    }
+  }, [history.length, saveToHistory]);
 
   // Initialize canvas on mount and resize
   useEffect(() => {
@@ -164,16 +218,31 @@ export const Whiteboard: React.FC = () => {
     setCustomColor(penColor);
   }, [penColor]);
 
+  // Render text elements
+  useEffect(() => {
+    const textCanvas = textCanvasRef.current;
+    const textCtx = textCanvas?.getContext('2d');
+    if (!textCtx || !textCanvas) return;
+
+    textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+    
+    textElements.forEach(element => {
+      textCtx.fillStyle = element.color;
+      textCtx.font = `${element.size}px Arial`;
+      textCtx.fillText(element.text, element.x, element.y);
+    });
+  }, [textElements]);
+
   const getCanvasPosition = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
 
     const rect = canvas.getBoundingClientRect();
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: (e.clientX - rect.left) / zoom,
+      y: (e.clientY - rect.top) / zoom,
     };
-  }, []);
+  }, [zoom]);
 
   const drawShape = useCallback((ctx: CanvasRenderingContext2D, startX: number, startY: number, endX: number, endY: number, shape: ShapeType) => {
     ctx.strokeStyle = penColor;
@@ -206,6 +275,13 @@ export const Whiteboard: React.FC = () => {
         ctx.closePath();
         ctx.stroke();
         break;
+        
+      case 'line':
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+        break;
     }
   }, [penColor, penSize]);
 
@@ -219,6 +295,13 @@ export const Whiteboard: React.FC = () => {
 
   const startDrawing = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const { x, y } = getCanvasPosition(e);
+    
+    if (drawingMode === 'text') {
+      setTextPosition({ x, y });
+      setIsAddingText(true);
+      return;
+    }
+    
     setDrawingState({
       isDrawing: true,
       lastX: x,
@@ -226,7 +309,7 @@ export const Whiteboard: React.FC = () => {
       startX: x,
       startY: y,
     });
-  }, [getCanvasPosition]);
+  }, [getCanvasPosition, drawingMode]);
 
   const draw = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!drawingState.isDrawing) return;
@@ -245,7 +328,7 @@ export const Whiteboard: React.FC = () => {
       // Clear preview and draw shape preview
       clearPreviewCanvas();
       drawShape(previewCtx, drawingState.startX, drawingState.startY, x, y, selectedShape);
-    } else {
+    } else if (drawingMode === 'brush') {
       // Brush drawing
       if (brushStyle === 'highlighter') {
         // Use separate highlighter canvas with multiply blend mode for consistent opacity
@@ -314,17 +397,22 @@ export const Whiteboard: React.FC = () => {
       const { x, y } = getCanvasPosition(e);
       drawShape(ctx, drawingState.startX, drawingState.startY, x, y, selectedShape);
       clearPreviewCanvas();
+      saveToHistory();
+    } else if (drawingMode === 'brush') {
+      saveToHistory();
     }
 
     setDrawingState(prev => ({ ...prev, isDrawing: false }));
-  }, [drawingState.isDrawing, drawingState.startX, drawingState.startY, drawingMode, selectedShape, getCanvasPosition, drawShape, clearPreviewCanvas]);
+  }, [drawingState.isDrawing, drawingState.startX, drawingState.startY, drawingMode, selectedShape, getCanvasPosition, drawShape, clearPreviewCanvas, saveToHistory]);
 
   const clearCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     const highlighterCanvas = highlighterCanvasRef.current;
     const highlighterCtx = highlighterCanvas?.getContext('2d');
-    if (!ctx || !canvas || !highlighterCtx || !highlighterCanvas) return;
+    const textCanvas = textCanvasRef.current;
+    const textCtx = textCanvas?.getContext('2d');
+    if (!ctx || !canvas || !highlighterCtx || !highlighterCanvas || !textCtx || !textCanvas) return;
 
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -332,8 +420,13 @@ export const Whiteboard: React.FC = () => {
     // Clear highlighter canvas
     highlighterCtx.clearRect(0, 0, highlighterCanvas.width, highlighterCanvas.height);
     
+    // Clear text canvas and elements
+    textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+    setTextElements([]);
+    
     clearPreviewCanvas();
-  }, [clearPreviewCanvas]);
+    saveToHistory();
+  }, [clearPreviewCanvas, saveToHistory]);
 
   const handleBrushStyleChange = useCallback((style: BrushStyle) => {
     setBrushStyle(style);
@@ -345,6 +438,11 @@ export const Whiteboard: React.FC = () => {
     setSelectedShape(shape);
     setDrawingMode('shape');
     setShowShapeDropdown(false);
+  }, []);
+
+  const handleToolSelect = useCallback((tool: string) => {
+    setDrawingMode(tool as DrawingMode);
+    setShowToolsDropdown(false);
   }, []);
 
   const handleColorSelect = useCallback((color: string) => {
@@ -363,6 +461,163 @@ export const Whiteboard: React.FC = () => {
     colorInputRef.current?.click();
   }, []);
 
+  // Undo functionality
+  const undo = useCallback(() => {
+    if (historyStep > 0) {
+      const newStep = historyStep - 1;
+      const state = JSON.parse(history[newStep]);
+      
+      const canvas = canvasRef.current;
+      const highlighterCanvas = highlighterCanvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      const highlighterCtx = highlighterCanvas?.getContext('2d');
+      
+      if (!ctx || !highlighterCtx || !canvas || !highlighterCanvas) return;
+      
+      const mainImg = new Image();
+      const highlighterImg = new Image();
+      
+      mainImg.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(mainImg, 0, 0);
+      };
+      
+      highlighterImg.onload = () => {
+        highlighterCtx.clearRect(0, 0, highlighterCanvas.width, highlighterCanvas.height);
+        highlighterCtx.drawImage(highlighterImg, 0, 0);
+      };
+      
+      mainImg.src = state.main;
+      highlighterImg.src = state.highlighter;
+      setTextElements(state.textElements || []);
+      setHistoryStep(newStep);
+    }
+  }, [history, historyStep]);
+
+  // Redo functionality
+  const redo = useCallback(() => {
+    if (historyStep < history.length - 1) {
+      const newStep = historyStep + 1;
+      const state = JSON.parse(history[newStep]);
+      
+      const canvas = canvasRef.current;
+      const highlighterCanvas = highlighterCanvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      const highlighterCtx = highlighterCanvas?.getContext('2d');
+      
+      if (!ctx || !highlighterCtx || !canvas || !highlighterCanvas) return;
+      
+      const mainImg = new Image();
+      const highlighterImg = new Image();
+      
+      mainImg.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(mainImg, 0, 0);
+      };
+      
+      highlighterImg.onload = () => {
+        highlighterCtx.clearRect(0, 0, highlighterCanvas.width, highlighterCanvas.height);
+        highlighterCtx.drawImage(highlighterImg, 0, 0);
+      };
+      
+      mainImg.src = state.main;
+      highlighterImg.src = state.highlighter;
+      setTextElements(state.textElements || []);
+      setHistoryStep(newStep);
+    }
+  }, [history, historyStep]);
+
+  // Zoom functionality
+  const zoomIn = useCallback(() => {
+    setZoom(prev => Math.min(prev * 1.2, 3));
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    setZoom(prev => Math.max(prev / 1.2, 0.5));
+  }, []);
+
+  const resetZoom = useCallback(() => {
+    setZoom(1);
+  }, []);
+
+  // Export canvas
+  const exportCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    const highlighterCanvas = highlighterCanvasRef.current;
+    const textCanvas = textCanvasRef.current;
+    if (!canvas || !highlighterCanvas || !textCanvas) return;
+
+    // Create a temporary canvas to combine all layers
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    if (!tempCtx) return;
+
+    // Draw all layers
+    tempCtx.drawImage(canvas, 0, 0);
+    tempCtx.drawImage(highlighterCanvas, 0, 0);
+    tempCtx.drawImage(textCanvas, 0, 0);
+
+    // Download
+    const link = document.createElement('a');
+    link.download = 'whiteboard.png';
+    link.href = tempCanvas.toDataURL();
+    link.click();
+  }, []);
+
+  // Import image
+  const importImage = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = canvasRef.current;
+        const ctx = canvas?.getContext('2d');
+        if (!ctx || !canvas) return;
+
+        // Clear canvas and draw imported image
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Scale image to fit canvas
+        const scale = Math.min(canvas.width / img.width, canvas.height / img.height) / 2;
+        const x = (canvas.width / 2 - img.width * scale) / 2;
+        const y = (canvas.height / 2 - img.height * scale) / 2;
+        
+        ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+        saveToHistory();
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  }, [saveToHistory]);
+
+  // Add text
+  const addText = useCallback(() => {
+    if (textInput.trim()) {
+      const newTextElement: TextElement = {
+        id: Date.now().toString(),
+        x: textPosition.x,
+        y: textPosition.y,
+        text: textInput.trim(),
+        color: penColor,
+        size: penSize * 8,
+      };
+      setTextElements(prev => [...prev, newTextElement]);
+      setTextInput('');
+      setIsAddingText(false);
+      saveToHistory();
+    }
+  }, [textInput, textPosition, penColor, penSize, saveToHistory]);
+
   const sendMessage = useCallback(() => {
     if (newMessage.trim()) {
       const message: Message = {
@@ -380,9 +635,13 @@ export const Whiteboard: React.FC = () => {
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      if (isAddingText) {
+        addText();
+      } else {
+        sendMessage();
+      }
     }
-  }, [sendMessage]);
+  }, [sendMessage, addText, isAddingText]);
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -403,7 +662,7 @@ export const Whiteboard: React.FC = () => {
       {/* Enhanced Drawing Controls - Floating Toolbar */}
       <div className="sticky top-0 z-10 bg-white rounded-lg shadow-md border border-gray-200 p-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-4">
             {/* Brush Style Selector */}
             <div className="relative">
               <button
@@ -419,7 +678,7 @@ export const Whiteboard: React.FC = () => {
                 <ChevronDown size={12} className={`transition-transform duration-300 ${showBrushDropdown ? 'rotate-180' : ''}`} />
               </button>
               {showBrushDropdown && (
-                <div className="absolute top-12 left-0 p-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[140px] transition-all duration-300 ease-in-out animate-in slide-in-from-top-2">
+                <div className="absolute top-12 left-0 p-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[140px]">
                   {brushStyles.map((style) => (
                     <button
                       key={style.id}
@@ -453,7 +712,7 @@ export const Whiteboard: React.FC = () => {
                 <ChevronDown size={12} className={`transition-transform duration-300 ${showShapeDropdown ? 'rotate-180' : ''}`} />
               </button>
               {showShapeDropdown && (
-                <div className="absolute top-12 left-0 p-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px] transition-all duration-300 ease-in-out animate-in slide-in-from-top-2">
+                <div className="absolute top-12 left-0 p-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px]">
                   {shapeTypes.map((shape) => (
                     <button
                       key={shape.id}
@@ -470,6 +729,91 @@ export const Whiteboard: React.FC = () => {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Additional Tools */}
+            <div className="relative">
+              <button
+                onClick={() => setShowToolsDropdown(!showToolsDropdown)}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 ${
+                  drawingMode === 'text' || drawingMode === 'select'
+                    ? 'bg-purple-100 text-purple-600 shadow-md' 
+                    : 'text-gray-600 hover:bg-gray-100 hover:shadow-sm'
+                }`}
+                title="Additional Tools"
+              >
+                {drawingMode === 'text' ? <Type size={16} /> : drawingMode === 'select' ? <Move size={16} /> : <Type size={16} />}
+                <ChevronDown size={12} className={`transition-transform duration-300 ${showToolsDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              {showToolsDropdown && (
+                <div className="absolute top-12 left-0 p-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[140px]">
+                  {additionalTools.map((tool) => (
+                    <button
+                      key={tool.id}
+                      onClick={() => handleToolSelect(tool.id)}
+                      className={`w-full flex items-center space-x-2 px-3 py-2 text-sm rounded-md transition-all duration-200 ease-in-out ${
+                        drawingMode === tool.id
+                          ? 'bg-purple-100 text-purple-600'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <tool.icon size={14} />
+                      <span>{tool.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Separator */}
+            <div className="w-px h-6 bg-gray-300"></div>
+
+            {/* Undo/Redo */}
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={undo}
+                disabled={historyStep <= 0}
+                className="p-2 text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
+                title="Undo"
+              >
+                <Undo size={16} />
+              </button>
+              <button
+                onClick={redo}
+                disabled={historyStep >= history.length - 1}
+                className="p-2 text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
+                title="Redo"
+              >
+                <Redo size={16} />
+              </button>
+            </div>
+
+            {/* Separator */}
+            <div className="w-px h-6 bg-gray-300"></div>
+
+            {/* Zoom Controls */}
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={zoomOut}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
+                title="Zoom Out"
+              >
+                <ZoomOut size={16} />
+              </button>
+              <button
+                onClick={resetZoom}
+                className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded min-w-[40px] transition-all duration-300 ease-in-out"
+                title="Reset Zoom"
+              >
+                {Math.round(zoom * 100)}%
+              </button>
+              <button
+                onClick={zoomIn}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
+                title="Zoom In"
+              >
+                <ZoomIn size={16} />
+              </button>
             </div>
 
             {/* Separator */}
@@ -592,23 +936,92 @@ export const Whiteboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Clear Canvas Button */}
-          <button
-            onClick={clearCanvas}
-            className="flex items-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 hover:shadow-md"
-            title="Clear entire canvas"
-          >
-            <RotateCcw size={16} />
-            <span>Clear Canvas</span>
-          </button>
+          {/* Right Side Controls */}
+          <div className="flex items-center space-x-2">
+            {/* Import/Export */}
+            <button
+              onClick={importImage}
+              className="flex items-center space-x-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
+              title="Import image"
+            >
+              <Upload size={16} />
+              <span className="hidden sm:inline">Import</span>
+            </button>
+            <button
+              onClick={exportCanvas}
+              className="flex items-center space-x-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
+              title="Export canvas"
+            >
+              <Download size={16} />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+
+            {/* Separator */}
+            <div className="w-px h-6 bg-gray-300"></div>
+
+            {/* Clear Canvas Button */}
+            <button
+              onClick={clearCanvas}
+              className="flex items-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 hover:shadow-md"
+              title="Clear entire canvas"
+            >
+              <Trash2 size={16} />
+              <span className="hidden sm:inline">Clear</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Text Input Modal */}
+      {isAddingText && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Add Text</h3>
+            <input
+              type="text"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Enter your text..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
+              autoFocus
+            />
+            <div className="flex space-x-2">
+              <button
+                onClick={addText}
+                disabled={!textInput.trim()}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-all duration-200"
+              >
+                Add Text
+              </button>
+              <button
+                onClick={() => setIsAddingText(false)}
+                className="flex-1 px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg transition-all duration-200"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileImport}
+        className="hidden"
+      />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col lg:flex-row gap-4">
         {/* Canvas Area */}
         <div className="flex-1">
-          <div className="w-full h-full rounded-lg shadow-sm border border-gray-200 overflow-hidden relative bg-white">
+          <div 
+            className="w-full h-full rounded-lg shadow-sm border border-gray-200 overflow-hidden relative bg-white"
+            style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
+          >
             {/* Main Canvas */}
             <canvas
               ref={canvasRef}
@@ -623,6 +1036,11 @@ export const Whiteboard: React.FC = () => {
               ref={highlighterCanvasRef}
               className="absolute inset-0 w-full h-full cursor-crosshair pointer-events-none"
               style={{ mixBlendMode: 'multiply' }}
+            />
+            {/* Text Canvas */}
+            <canvas
+              ref={textCanvasRef}
+              className="absolute inset-0 w-full h-full cursor-crosshair pointer-events-none"
             />
             {/* Preview Canvas for shapes */}
             <canvas
