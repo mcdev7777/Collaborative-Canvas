@@ -42,5 +42,5 @@ Designed to enable seamless visual collaboration between multiple users — perf
 
 ## Contact
 
-- GitHub: [@QudahM](https://github.com/QudahM)
-- LinkedIn: [linkedin.com/in/your-profile](https://www.linkedin.com/in/qudahm/)
+- GitHub: [User](https://github.com/QudahM)
+- LinkedIn: [User](https://www.linkedin.com/in/qudahm/)
