@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Palette, Minus, Plus, RotateCcw, Send, Pen, Highlighter, Eraser, Square, Circle, Triangle, ChevronDown, Pipette } from 'lucide-react';
+import { Palette, Minus, Plus, RotateCcw, Send, Pen, Eraser, Square, Circle, Triangle, ChevronDown, Pipette } from 'lucide-react';
 
 interface DrawingState {
   isDrawing: boolean;
@@ -22,14 +22,13 @@ interface Message {
   timestamp: Date;
 }
 
-type BrushStyle = 'pen' | 'highlighter' | 'eraser';
+type BrushStyle = 'pen' | 'eraser';
 type ShapeType = 'rectangle' | 'circle' | 'triangle';
 type DrawingMode = 'brush' | 'shape';
 
 export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
-  const highlighterCanvasRef = useRef<HTMLCanvasElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const colorInputRef = useRef<HTMLInputElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -78,7 +77,6 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
 
   const brushStyles = [
     { id: 'pen', name: 'Regular Pen', icon: Pen },
-    { id: 'highlighter', name: 'Highlighter', icon: Highlighter },
     { id: 'eraser', name: 'Eraser', icon: Eraser },
   ];
 
@@ -92,8 +90,7 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
   const initializeCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     const previewCanvas = previewCanvasRef.current;
-    const highlighterCanvas = highlighterCanvasRef.current;
-    if (!canvas || !previewCanvas || !highlighterCanvas) return;
+    if (!canvas || !previewCanvas) return;
 
     // Setup canvas dimensions
     const rect = canvas.getBoundingClientRect();
@@ -101,7 +98,7 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
     const height = rect.height * 2;
     
     // Set dimensions for all canvases
-    [canvas, previewCanvas, highlighterCanvas].forEach(c => {
+    [canvas, previewCanvas].forEach(c => {
       c.width = width;
       c.height = height;
     });
@@ -109,12 +106,11 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
     // Setup contexts
     const ctx = canvas.getContext('2d');
     const previewCtx = previewCanvas.getContext('2d');
-    const highlighterCtx = highlighterCanvas.getContext('2d');
     
-    if (!ctx || !previewCtx || !highlighterCtx) return;
+    if (!ctx || !previewCtx ) return;
 
     // Configure all contexts
-    [ctx, previewCtx, highlighterCtx].forEach(context => {
+    [ctx, previewCtx].forEach(context => {
       context.scale(2, 2);
       context.lineCap = 'round';
       context.lineJoin = 'round';
@@ -273,9 +269,7 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
     const ctx = canvas?.getContext('2d');
     const previewCanvas = previewCanvasRef.current;
     const previewCtx = previewCanvas?.getContext('2d');
-    const highlighterCanvas = highlighterCanvasRef.current;
-    const highlighterCtx = highlighterCanvas?.getContext('2d');
-    if (!ctx || !previewCtx || !highlighterCtx) return;
+    if (!ctx || !previewCtx) return;
 
     const { x, y } = getCanvasPosition(e);
 
@@ -285,21 +279,7 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
       drawShape(previewCtx, drawingState.startX, drawingState.startY, x, y, selectedShape);
     } else {
       // Brush drawing
-      if (brushStyle === 'highlighter') {
-        // Use separate highlighter canvas with multiply blend mode for consistent opacity
-        highlighterCtx.globalAlpha = 0.3;
-        highlighterCtx.globalCompositeOperation = 'source-over';
-        highlighterCtx.strokeStyle = penColor;
-        highlighterCtx.lineWidth = penSize * 3;
-        
-        highlighterCtx.beginPath();
-        highlighterCtx.moveTo(drawingState.lastX, drawingState.lastY);
-        highlighterCtx.lineTo(x, y);
-        highlighterCtx.stroke();
-        
-        // Reset highlighter context
-        highlighterCtx.globalAlpha = 1;
-      } else if (brushStyle === 'eraser') {
+      if (brushStyle === 'eraser') {
         // Erase by drawing with white
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
@@ -310,15 +290,6 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
         ctx.moveTo(drawingState.lastX, drawingState.lastY);
         ctx.lineTo(x, y);
         ctx.stroke();
-        
-        // Also erase from highlighter canvas
-        highlighterCtx.globalCompositeOperation = 'destination-out';
-        highlighterCtx.lineWidth = penSize * 2;
-        highlighterCtx.beginPath();
-        highlighterCtx.moveTo(drawingState.lastX, drawingState.lastY);
-        highlighterCtx.lineTo(x, y);
-        highlighterCtx.stroke();
-        highlighterCtx.globalCompositeOperation = 'source-over';
       } else {
         // Regular pen
         ctx.globalAlpha = 1;
@@ -371,15 +342,10 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
   const clearCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
-    const highlighterCanvas = highlighterCanvasRef.current;
-    const highlighterCtx = highlighterCanvas?.getContext('2d');
-    if (!ctx || !canvas || !highlighterCtx || !highlighterCanvas) return;
+    if (!ctx || !canvas) return;
 
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Clear highlighter canvas
-    highlighterCtx.clearRect(0, 0, highlighterCanvas.width, highlighterCanvas.height);
     
     clearPreviewCanvas();
   }, [clearPreviewCanvas]);
@@ -662,12 +628,6 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
               onMouseMove={draw}
               onMouseUp={stopDrawing}
               onMouseLeave={stopDrawing}
-            />
-            {/* Highlighter Canvas */}
-            <canvas
-              ref={highlighterCanvasRef}
-              className="absolute inset-0 w-full h-full cursor-crosshair pointer-events-none"
-              style={{ mixBlendMode: 'multiply' }}
             />
             {/* Preview Canvas for shapes */}
             <canvas
