@@ -42,7 +42,25 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close()
 
+	registerClient(ws)
+	defer unregisterClient(ws)
+
+	sendChatHistory(ws)
+	sendDrawHistory(ws)
+
+	for {
+		_, msg, err := ws.ReadMessage()
+		if err != nil {
+			handleDisconnect(ws)
+			break
+		}
+		handleIncomingMessage(ws, msg)
+	}
+}
+
+func registerClient(ws *websocket.Conn) {
 	mu.Lock()
+	defer mu.Unlock()
 	if cleanupTimer != nil {
 		cleanupTimer.Stop()
 		cleanupTimer = nil
@@ -52,129 +70,140 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	clients[ws] = userCount
 	clientColors[ws] = colors[userCount%len(colors)]
 	broadcastUserCount()
-	mu.Unlock()
+}
+
+func unregisterClient(ws *websocket.Conn) {
+	mu.Lock()
+	defer mu.Unlock()
+	delete(clients, ws)
+	delete(clientColors, ws)
+	broadcastUserCount()
+}
+
+func sendChatHistory(ws *websocket.Conn) {
 	chatKeys, err := rdb.Keys(ctx, "chat:*").Result()
 	if err != nil {
 		log.Println("Error fetching chat keys:", err)
-	} else {
-		// Sort keys so chat history appears in order
-		sort.Strings(chatKeys)
-		for _, key := range chatKeys {
-			val, err := rdb.Get(ctx, key).Result()
-			if err != nil {
-				log.Println("Error reading chat key:", err)
-				continue
-			}
-			if json.Valid([]byte(val)) {
-				ws.WriteMessage(websocket.TextMessage, []byte(val))
-			} else {
-				log.Println("Invalid JSON in chat key:", key)
-			}
+		return
+	}
+	sort.Strings(chatKeys)
+	for _, key := range chatKeys {
+		val, err := rdb.Get(ctx, key).Result()
+		if err != nil {
+			log.Println("Error reading chat key:", err)
+			continue
+		}
+		if json.Valid([]byte(val)) {
+			ws.WriteMessage(websocket.TextMessage, []byte(val))
+		} else {
+			log.Println("Invalid JSON in chat key:", key)
 		}
 	}
+}
 
+func sendDrawHistory(ws *websocket.Conn) {
 	drawKeys, err := rdb.Keys(ctx, "draw:*").Result()
 	if err != nil {
 		log.Println("Error fetching draw keys:", err)
+		return
+	}
+	for _, key := range drawKeys {
+		val, err := rdb.Get(ctx, key).Result()
+		if err != nil {
+			log.Println("Error reading draw key:", err)
+			continue
+		}
+		if json.Valid([]byte(val)) {
+			ws.WriteMessage(websocket.TextMessage, []byte(val))
+		} else {
+			log.Println("Invalid JSON in draw key:", key)
+		}
+	}
+}
+
+func handleDisconnect(ws *websocket.Conn) {
+	log.Println("Error reading message: client disconnected")
+	unregisterClient(ws)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(clients) == 0 {
+		if cleanupTimer != nil {
+			cleanupTimer.Stop()
+			cleanupTimer = nil
+		}
+		cleanupTimer = time.AfterFunc(3*time.Minute, cleanupRedis)
+	}
+}
+
+func cleanupRedis() {
+	log.Println("No active users for the last 3 minutes, cleaning up...")
+	keys, err := rdb.Keys(ctx, "*").Result()
+	if err != nil {
+		log.Println("Error fetching keys from Redis:", err)
+		return
+	}
+	if len(keys) > 0 {
+		err = rdb.Del(ctx, keys...).Err()
+		if err != nil {
+			log.Println("Error deleting keys from Redis:", err)
+		} else {
+			log.Println("All keys deleted from Redis")
+		}
+	}
+}
+
+func handleIncomingMessage(ws *websocket.Conn, msg []byte) {
+	var payload map[string]interface{}
+	err := json.Unmarshal(msg, &payload)
+	if err != nil {
+		log.Println("Invalid JSON payload:", err)
+		return
+	}
+
+	log.Println("Incoming raw payload:", payload)
+
+	switch payload["type"] {
+	case "chat":
+		handleChatMessage(ws, payload)
+	case "draw", "shape":
+		handleDrawMessage(payload)
+	default:
+		log.Println("Unknown message type:", payload["type"])
+	}
+}
+
+func handleChatMessage(ws *websocket.Conn, payload map[string]interface{}) {
+	payload["username"] = fmt.Sprintf("User %d", clients[ws])
+	payload["userColor"] = clientColors[ws]
+	payload["timestamp"] = time.Now().UnixMilli()
+	msg, _ := json.Marshal(payload)
+
+	key := fmt.Sprintf("chat:%d", time.Now().UnixNano())
+	err := rdb.Set(ctx, key, msg, 15*time.Minute).Err()
+	if err != nil {
+		log.Println("Error saving chat message to Redis:", err)
 	} else {
-		// Sort keys so draw history appears in order
-		for _, key := range drawKeys {
-			val, err := rdb.Get(ctx, key).Result()
-			if err != nil {
-				log.Println("Error reading draw key:", err)
-				continue
-			}
-			if json.Valid([]byte(val)) {
-				ws.WriteMessage(websocket.TextMessage, []byte(val))
-			} else {
-				log.Println("Invalid JSON in draw key:", key)
-			}
-		}
+		log.Println("Chat message saved to Redis with key:", key)
+	}
+	broadcast <- msg
+}
+
+func handleDrawMessage(payload map[string]interface{}) {
+	log.Println("Received draw/shape message:", payload)
+	msg, err := json.Marshal(payload)
+	if err != nil {
+		log.Println("Error marshaling payload:", err)
+		return
 	}
 
-	for {
-		_, msg, err := ws.ReadMessage()
-		if err != nil {
-			log.Println("Error reading message:", err)
-			mu.Lock()
-			delete(clients, ws)
-			delete(clientColors, ws)
-			broadcastUserCount()
-
-			if len(clients) == 0 {
-				if cleanupTimer != nil {
-					cleanupTimer.Stop()
-					cleanupTimer = nil
-				}
-				cleanupTimer = time.AfterFunc(3*time.Minute, func() {
-					log.Println("No active users for the last 3 minutes, cleaning up...")
-
-					keys, err := rdb.Keys(ctx, "*").Result()
-					if err != nil {
-						log.Println("Error fetching keys from Redis:", err)
-						return
-					}
-
-					if len(keys) > 0 {
-						err = rdb.Del(ctx, keys...).Err()
-						if err != nil {
-							log.Println("Error deleting keys from Redis:", err)
-						} else {
-							log.Println("All keys deleted from Redis")
-						}
-					}
-				})
-			}
-			mu.Unlock()
-			break
-		}
-
-		var payload map[string]interface{}
-		err = json.Unmarshal(msg, &payload)
-		if err != nil {
-			log.Println("Invalid JSON payload:", err)
-			continue
-		}
-
-		log.Println("Incoming raw payload:", payload)
-
-		switch payload["type"] {
-		case "chat":
-			payload["username"] = fmt.Sprintf("User %d", clients[ws])
-			payload["userColor"] = clientColors[ws]
-			payload["timestamp"] = time.Now().UnixMilli()
-			msg, _ = json.Marshal(payload)
-
-			key := fmt.Sprintf("chat:%d", time.Now().UnixNano())
-			err = rdb.Set(ctx, key, msg, 15*time.Minute).Err()
-			if err != nil {
-				log.Println("Error saving chat message to Redis:", err)
-			} else {
-				log.Println("Chat message saved to Redis with key:", key)
-			}
-
-		case "draw", "shape":
-			log.Println("Received draw/shape message:", payload)
-			msg, err = json.Marshal(payload)
-			if err != nil {
-				log.Println("Error marshaling payload:", err)
-				continue
-			}
-
-			key := fmt.Sprintf("draw:%d", time.Now().UnixNano())
-			err = rdb.Set(ctx, key, msg, 15*time.Minute).Err()
-			if err != nil {
-				log.Println("Error saving draw message to Redis:", err)
-			} else {
-				log.Println("Draw message saved to Redis with key:", key)
-			}
-		default:
-			log.Println("Unknown message type:", payload["type"])
-			continue
-		}
-
-		broadcast <- msg
+	key := fmt.Sprintf("draw:%d", time.Now().UnixNano())
+	err = rdb.Set(ctx, key, msg, 15*time.Minute).Err()
+	if err != nil {
+		log.Println("Error saving draw message to Redis:", err)
+	} else {
+		log.Println("Draw message saved to Redis with key:", key)
 	}
+	broadcast <- msg
 }
 
 func broadcastUserCount() {
