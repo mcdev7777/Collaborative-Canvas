@@ -399,213 +399,215 @@ export const Whiteboard: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Enhanced Drawing Controls */}
-      <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200">
-        <div className="flex items-center space-x-6">
-          {/* Brush Style Selector */}
-          <div className="relative">
-            <button
-              onClick={() => setShowBrushDropdown(!showBrushDropdown)}
-              className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 ${
-                drawingMode === 'brush' 
-                  ? 'bg-blue-100 text-blue-600 shadow-md' 
-                  : 'text-gray-600 hover:bg-gray-100 hover:shadow-sm'
-              }`}
-              title={`Current: ${brushStyles.find(s => s.id === brushStyle)?.name}`}
-            >
-              {React.createElement(getCurrentBrushIcon(), { size: 16 })}
-              <ChevronDown size={12} className={`transition-transform duration-300 ${showBrushDropdown ? 'rotate-180' : ''}`} />
-            </button>
-            {showBrushDropdown && (
-              <div className="absolute top-12 left-0 p-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[140px] transition-all duration-300 ease-in-out animate-in slide-in-from-top-2">
-                {brushStyles.map((style) => (
-                  <button
-                    key={style.id}
-                    onClick={() => handleBrushStyleChange(style.id as BrushStyle)}
-                    className={`w-full flex items-center space-x-2 px-3 py-2 text-sm rounded-md transition-all duration-200 ease-in-out ${
-                      brushStyle === style.id
-                        ? 'bg-blue-100 text-blue-600'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    <style.icon size={14} />
-                    <span>{style.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Shape Tool */}
-          <div className="relative">
-            <button
-              onClick={() => setShowShapeDropdown(!showShapeDropdown)}
-              className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 ${
-                drawingMode === 'shape' 
-                  ? 'bg-emerald-100 text-emerald-600 shadow-md' 
-                  : 'text-gray-600 hover:bg-gray-100 hover:shadow-sm'
-              }`}
-              title={`Shape: ${shapeTypes.find(s => s.id === selectedShape)?.name}`}
-            >
-              {React.createElement(getCurrentShapeIcon(), { size: 16 })}
-              <ChevronDown size={12} className={`transition-transform duration-300 ${showShapeDropdown ? 'rotate-180' : ''}`} />
-            </button>
-            {showShapeDropdown && (
-              <div className="absolute top-12 left-0 p-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px] transition-all duration-300 ease-in-out animate-in slide-in-from-top-2">
-                {shapeTypes.map((shape) => (
-                  <button
-                    key={shape.id}
-                    onClick={() => handleShapeSelect(shape.id as ShapeType)}
-                    className={`w-full flex items-center space-x-2 px-3 py-2 text-sm rounded-md transition-all duration-200 ease-in-out ${
-                      selectedShape === shape.id
-                        ? 'bg-emerald-100 text-emerald-600'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    <shape.icon size={14} />
-                    <span>{shape.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Separator */}
-          <div className="w-px h-6 bg-gray-300"></div>
-
-          {/* Pen Size */}
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setPenSize(Math.max(1, penSize - 1))}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
-              title="Decrease brush size"
-            >
-              <Minus size={16} />
-            </button>
-            <div className="flex items-center space-x-2 px-3 py-1 bg-gray-100 rounded-lg">
-              <div
-                className="rounded-full bg-current transition-all duration-300 ease-in-out"
-                style={{
-                  width: `${Math.max(4, penSize * 2)}px`,
-                  height: `${Math.max(4, penSize * 2)}px`,
-                  color: brushStyle === 'eraser' ? '#FFFFFF' : penColor,
-                }}
-              />
-              <span className="text-sm text-gray-600">{penSize}px</span>
-            </div>
-            <button
-              onClick={() => setPenSize(Math.min(20, penSize + 1))}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
-              title="Increase brush size"
-            >
-              <Plus size={16} />
-            </button>
-          </div>
-
-          {/* Enhanced Color Picker */}
-          <div className="relative">
-            <button
-              onClick={() => setShowColorPicker(!showColorPicker)}
-              className="flex items-center space-x-2 p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
-              title="Choose color"
-              disabled={brushStyle === 'eraser'}
-            >
-              <Palette size={16} />
-              <div
-                className={`w-4 h-4 rounded border border-gray-300 transition-all duration-300 ease-in-out ${
-                  brushStyle === 'eraser' ? 'opacity-50' : ''
+    <div className="flex flex-col h-full p-4 gap-4">
+      {/* Enhanced Drawing Controls - Floating Toolbar */}
+      <div className="sticky top-0 z-10 bg-white rounded-lg shadow-md border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-6">
+            {/* Brush Style Selector */}
+            <div className="relative">
+              <button
+                onClick={() => setShowBrushDropdown(!showBrushDropdown)}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 ${
+                  drawingMode === 'brush' 
+                    ? 'bg-blue-100 text-blue-600 shadow-md' 
+                    : 'text-gray-600 hover:bg-gray-100 hover:shadow-sm'
                 }`}
-                style={{ backgroundColor: brushStyle === 'eraser' ? '#FFFFFF' : penColor }}
-              />
-            </button>
-            {showColorPicker && brushStyle !== 'eraser' && (
-              <div className="absolute top-12 left-0 p-3 bg-white border border-gray-200 rounded-lg shadow-lg z-10 transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 min-w-[280px]">
-                {/* Preset Colors */}
-                <div className="mb-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Preset Colors</h4>
-                  <div className="grid grid-cols-8 gap-1.5">
-                    {presetColors.map((color) => (
-                      <button
-                        key={color}
-                        onClick={() => handleColorSelect(color)}
-                        className={`w-7 h-7 rounded border-2 hover:scale-110 transition-all duration-200 ease-in-out ${
-                          penColor === color 
-                            ? 'border-gray-400 ring-2 ring-blue-500 ring-opacity-50' 
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        style={{ backgroundColor: color }}
-                        title={color}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {/* Custom Color Section */}
-                <div className="border-t border-gray-200 pt-3">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Custom Color</h4>
-                  <div className="flex items-center space-x-2">
-                    {/* Hidden color input */}
-                    <input
-                      ref={colorInputRef}
-                      type="color"
-                      value={customColor}
-                      onChange={handleCustomColorChange}
-                      className="sr-only"
-                    />
-                    
-                    {/* Custom color picker button */}
+                title={`Current: ${brushStyles.find(s => s.id === brushStyle)?.name}`}
+              >
+                {React.createElement(getCurrentBrushIcon(), { size: 16 })}
+                <ChevronDown size={12} className={`transition-transform duration-300 ${showBrushDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              {showBrushDropdown && (
+                <div className="absolute top-12 left-0 p-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[140px] transition-all duration-300 ease-in-out animate-in slide-in-from-top-2">
+                  {brushStyles.map((style) => (
                     <button
-                      onClick={openColorPicker}
-                      className="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-200 ease-in-out transform hover:scale-105"
-                      title="Pick custom color"
+                      key={style.id}
+                      onClick={() => handleBrushStyleChange(style.id as BrushStyle)}
+                      className={`w-full flex items-center space-x-2 px-3 py-2 text-sm rounded-md transition-all duration-200 ease-in-out ${
+                        brushStyle === style.id
+                          ? 'bg-blue-100 text-blue-600'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
                     >
-                      <Pipette size={14} />
-                      <span className="text-sm text-gray-700">Pick Color</span>
+                      <style.icon size={14} />
+                      <span>{style.name}</span>
                     </button>
-                    
-                    {/* Current custom color display */}
-                    <div className="flex items-center space-x-2">
-                      <div
-                        className="w-8 h-8 rounded border-2 border-gray-300"
-                        style={{ backgroundColor: customColor }}
-                      />
-                      <span className="text-xs font-mono text-gray-600 uppercase">
-                        {customColor}
-                      </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Shape Tool */}
+            <div className="relative">
+              <button
+                onClick={() => setShowShapeDropdown(!showShapeDropdown)}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 ${
+                  drawingMode === 'shape' 
+                    ? 'bg-emerald-100 text-emerald-600 shadow-md' 
+                    : 'text-gray-600 hover:bg-gray-100 hover:shadow-sm'
+                }`}
+                title={`Shape: ${shapeTypes.find(s => s.id === selectedShape)?.name}`}
+              >
+                {React.createElement(getCurrentShapeIcon(), { size: 16 })}
+                <ChevronDown size={12} className={`transition-transform duration-300 ${showShapeDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              {showShapeDropdown && (
+                <div className="absolute top-12 left-0 p-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px] transition-all duration-300 ease-in-out animate-in slide-in-from-top-2">
+                  {shapeTypes.map((shape) => (
+                    <button
+                      key={shape.id}
+                      onClick={() => handleShapeSelect(shape.id as ShapeType)}
+                      className={`w-full flex items-center space-x-2 px-3 py-2 text-sm rounded-md transition-all duration-200 ease-in-out ${
+                        selectedShape === shape.id
+                          ? 'bg-emerald-100 text-emerald-600'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <shape.icon size={14} />
+                      <span>{shape.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Separator */}
+            <div className="w-px h-6 bg-gray-300"></div>
+
+            {/* Pen Size */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setPenSize(Math.max(1, penSize - 1))}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
+                title="Decrease brush size"
+              >
+                <Minus size={16} />
+              </button>
+              <div className="flex items-center space-x-2 px-3 py-1 bg-gray-100 rounded-lg">
+                <div
+                  className="rounded-full bg-current transition-all duration-300 ease-in-out"
+                  style={{
+                    width: `${Math.max(4, penSize * 2)}px`,
+                    height: `${Math.max(4, penSize * 2)}px`,
+                    color: brushStyle === 'eraser' ? '#FFFFFF' : penColor,
+                  }}
+                />
+                <span className="text-sm text-gray-600">{penSize}px</span>
+              </div>
+              <button
+                onClick={() => setPenSize(Math.min(20, penSize + 1))}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
+                title="Increase brush size"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+
+            {/* Enhanced Color Picker */}
+            <div className="relative">
+              <button
+                onClick={() => setShowColorPicker(!showColorPicker)}
+                className="flex items-center space-x-2 p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
+                title="Choose color"
+                disabled={brushStyle === 'eraser'}
+              >
+                <Palette size={16} />
+                <div
+                  className={`w-4 h-4 rounded border border-gray-300 transition-all duration-300 ease-in-out ${
+                    brushStyle === 'eraser' ? 'opacity-50' : ''
+                  }`}
+                  style={{ backgroundColor: brushStyle === 'eraser' ? '#FFFFFF' : penColor }}
+                />
+              </button>
+              {showColorPicker && brushStyle !== 'eraser' && (
+                <div className="absolute top-12 left-0 p-3 bg-white border border-gray-200 rounded-lg shadow-lg z-10 transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 min-w-[280px]">
+                  {/* Preset Colors */}
+                  <div className="mb-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Preset Colors</h4>
+                    <div className="grid grid-cols-8 gap-1.5">
+                      {presetColors.map((color) => (
+                        <button
+                          key={color}
+                          onClick={() => handleColorSelect(color)}
+                          className={`w-7 h-7 rounded border-2 hover:scale-110 transition-all duration-200 ease-in-out ${
+                            penColor === color 
+                              ? 'border-gray-400 ring-2 ring-blue-500 ring-opacity-50' 
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                          style={{ backgroundColor: color }}
+                          title={color}
+                        />
+                      ))}
                     </div>
                   </div>
-                  
-                  {/* Apply custom color button */}
-                  {customColor !== penColor && (
-                    <button
-                      onClick={() => handleColorSelect(customColor)}
-                      className="w-full mt-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-all duration-200 ease-in-out transform hover:scale-105"
-                    >
-                      Apply Color
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Clear Canvas Button */}
-        <button
-          onClick={clearCanvas}
-          className="flex items-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 hover:shadow-md"
-          title="Clear entire canvas"
-        >
-          <RotateCcw size={16} />
-          <span>Clear Canvas</span>
-        </button>
+                  {/* Custom Color Section */}
+                  <div className="border-t border-gray-200 pt-3">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Custom Color</h4>
+                    <div className="flex items-center space-x-2">
+                      {/* Hidden color input */}
+                      <input
+                        ref={colorInputRef}
+                        type="color"
+                        value={customColor}
+                        onChange={handleCustomColorChange}
+                        className="sr-only"
+                      />
+                      
+                      {/* Custom color picker button */}
+                      <button
+                        onClick={openColorPicker}
+                        className="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-200 ease-in-out transform hover:scale-105"
+                        title="Pick custom color"
+                      >
+                        <Pipette size={14} />
+                        <span className="text-sm text-gray-700">Pick Color</span>
+                      </button>
+                      
+                      {/* Current custom color display */}
+                      <div className="flex items-center space-x-2">
+                        <div
+                          className="w-8 h-8 rounded border-2 border-gray-300"
+                          style={{ backgroundColor: customColor }}
+                        />
+                        <span className="text-xs font-mono text-gray-600 uppercase">
+                          {customColor}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Apply custom color button */}
+                    {customColor !== penColor && (
+                      <button
+                        onClick={() => handleColorSelect(customColor)}
+                        className="w-full mt-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-all duration-200 ease-in-out transform hover:scale-105"
+                      >
+                        Apply Color
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Clear Canvas Button */}
+          <button
+            onClick={clearCanvas}
+            className="flex items-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 hover:shadow-md"
+            title="Clear entire canvas"
+          >
+            <RotateCcw size={16} />
+            <span>Clear Canvas</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col lg:flex-row bg-gray-50">
+      <div className="flex-1 flex flex-col lg:flex-row gap-4">
         {/* Canvas Area */}
-        <div className="flex-1 p-4">
+        <div className="flex-1">
           <div className="w-full h-full rounded-lg shadow-sm border border-gray-200 overflow-hidden relative bg-white">
             {/* Main Canvas */}
             <canvas
@@ -631,9 +633,9 @@ export const Whiteboard: React.FC = () => {
         </div>
 
         {/* Chat Area */}
-        <div className="w-full lg:w-80 flex flex-col bg-white border-t lg:border-t-0 lg:border-l border-gray-200">
+        <div className="w-full lg:w-80 flex flex-col bg-white rounded-lg shadow-sm border border-gray-200" style={{ backgroundColor: '#f1f3f5', borderLeft: '1px solid #dee2e6' }}>
           {/* Chat Header */}
-          <div className="p-4 border-b border-gray-200">
+          <div className="p-4 border-b border-gray-200 bg-white rounded-t-lg">
             <h3 className="text-lg font-semibold text-gray-900">Team Chat</h3>
             <p className="text-sm text-gray-500">{messages.length} messages</p>
           </div>
@@ -641,7 +643,7 @@ export const Whiteboard: React.FC = () => {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-64 lg:max-h-none scrollbar-thin">
             {messages.map((message) => (
-              <div key={message.id} className="flex flex-col space-y-1 hover:bg-gray-50 rounded-lg p-2 -m-2">
+              <div key={message.id} className="flex flex-col space-y-1 hover:bg-gray-100 rounded-lg p-2 -m-2 transition-colors duration-200">
                 <div className="flex items-center space-x-2">
                   <div
                     className="w-3 h-3 rounded-full"
@@ -663,7 +665,7 @@ export const Whiteboard: React.FC = () => {
           </div>
 
           {/* Message Input */}
-          <div className="p-4 border-t border-gray-200">
+          <div className="p-4 border-t border-gray-200 bg-white rounded-b-lg">
             <div className="flex space-x-2">
               <input
                 type="text"
