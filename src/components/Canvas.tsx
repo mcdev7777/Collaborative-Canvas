@@ -30,6 +30,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const snapshotRef = useRef<ImageData | null>(null);
+    const pointsRef = useRef<{ x: number; y: number }[]>([]);
 
     const getCtx = () => {
         const canvas = canvasRef.current;
@@ -48,7 +49,12 @@ export const Canvas: React.FC<CanvasProps> = ({
             y: (e.clientY - rect.top) * dpr,
         };
     }, []);
-
+    
+    const getMidpoint = (p1: { x: number; y: number }, p2: { x: number; y: number }) => ({
+    x: (p1.x + p2.x) / 2,
+    y: (p1.y + p2.y) / 2,
+    });
+    
     const startDrawing = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
         const { x, y } = getCanvasPosition(e);
         const ctx = getCtx();
@@ -57,6 +63,8 @@ export const Canvas: React.FC<CanvasProps> = ({
         if (drawingMode === 'shape') {
             snapshotRef.current = ctx.getImageData(0, 0, canvasRef.current!.width, canvasRef.current!.height);
         }
+
+        pointsRef.current = [{ x, y }];
 
         setDrawingState({
             isDrawing: true,
@@ -78,18 +86,31 @@ export const Canvas: React.FC<CanvasProps> = ({
             if (snapshotRef.current) ctx.putImageData(snapshotRef.current, 0, 0);
             drawShape(ctx, drawingState.startX, drawingState.startY, x, y, selectedShape, penColor, penSize);
         } else {
+            const newPoint = { x, y };
+            pointsRef.current.push(newPoint);
+
             ctx.globalAlpha = 1;
             ctx.globalCompositeOperation = 'source-over';
             ctx.strokeStyle = brushStyle === 'eraser' ? '#FFFFFF' : penColor;
             ctx.lineWidth = brushStyle === 'eraser' ? penSize * 2 : penSize;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
 
-            ctx.beginPath();
-            ctx.moveTo(drawingState.lastX, drawingState.lastY);
-            ctx.lineTo(x, y);
-            ctx.stroke();
+            if (pointsRef.current.length >= 3) {
+                const [p0, p1, p2] = pointsRef.current.slice(-3);
+                const mid1 = getMidpoint(p0, p1);
+                const mid2 = getMidpoint(p1, p2);
+
+                ctx.beginPath();
+                ctx.moveTo(mid1.x, mid1.y);
+                ctx.quadraticCurveTo(p1.x, p1.y, mid2.x, mid2.y);
+                ctx.stroke();
+                ctx.closePath();
+            }
 
             if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-                socketRef.current.send(JSON.stringify({
+                socketRef.current.send(
+                JSON.stringify({
                     type: 'draw',
                     x1: drawingState.lastX,
                     y1: drawingState.lastY,
@@ -98,9 +119,9 @@ export const Canvas: React.FC<CanvasProps> = ({
                     color: brushStyle === 'eraser' ? '#FFFFFF' : penColor,
                     size: brushStyle === 'eraser' ? penSize * 2 : penSize,
                     isEraser: brushStyle === 'eraser',
-                }));
+                })
+                );
             }
-
 
             setDrawingState(prev => ({ ...prev, lastX: x, lastY: y }));
         }
@@ -131,6 +152,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             }
         }
 
+        pointsRef.current = [];
         setDrawingState(prev => ({ ...prev, isDrawing: false }));
     }, [drawingState, drawingMode, getCanvasPosition, selectedShape, penColor, penSize, setDrawingState, socketRef]);
 
@@ -164,6 +186,8 @@ export const Canvas: React.FC<CanvasProps> = ({
             if (data.type === 'draw') {
                 ctx.strokeStyle = data.color;
                 ctx.lineWidth = data.size;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
                 ctx.beginPath();
                 ctx.moveTo(data.x1 / dpr, data.y1 / dpr);
                 ctx.lineTo(data.x2 / dpr, data.y2 / dpr);
