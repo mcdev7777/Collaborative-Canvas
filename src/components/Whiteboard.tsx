@@ -182,13 +182,13 @@ export const Whiteboard: React.FC = () => {
     ctx.globalCompositeOperation = 'source-over';
 
     switch (shape) {
-      case 'rectangle':
+      case 'rectangle': {
         const width = endX - startX;
         const height = endY - startY;
         ctx.strokeRect(startX, startY, width, height);
         break;
-      
-      case 'circle':
+      }
+      case 'circle': {
         const centerX = (startX + endX) / 2;
         const centerY = (startY + endY) / 2;
         const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2)) / 2;
@@ -196,8 +196,8 @@ export const Whiteboard: React.FC = () => {
         ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
         ctx.stroke();
         break;
-      
-      case 'triangle':
+      }
+      case 'triangle': {
         const midX = (startX + endX) / 2;
         ctx.beginPath();
         ctx.moveTo(midX, startY); // Top point
@@ -206,6 +206,7 @@ export const Whiteboard: React.FC = () => {
         ctx.closePath();
         ctx.stroke();
         break;
+      }
     }
   }, [penColor, penSize]);
 
