@@ -249,8 +249,7 @@ func main() {
 		}
 	}
 	// Initialize Redis client
-	redisURL := os.Getenv("REDIS_URL")
-	opt, err := redis.ParseURL(redisURL)
+	opt, err := redis.ParseURL(os.Getenv("REDIS_URL"))
 	if err != nil {
 		log.Fatal("Error parsing Redis URL:", err)
 	}
