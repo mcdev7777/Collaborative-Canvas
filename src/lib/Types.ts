@@ -14,6 +14,28 @@ export interface Message {
   timestamp: Date;
 }
 
+export type IncomingDrawMessage =
+  | {
+      type: 'draw';
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      color: string;
+      size: number;
+      isEraser?: boolean;
+    }
+  | {
+      type: 'shape';
+      shapeType: ShapeType;
+      startX: number;
+      startY: number;
+      endX: number;
+      endY: number;
+      color: string;
+      size: number;
+    };
+
 export type BrushStyle = 'pen' | 'eraser';
 export type ShapeType = 'rectangle' | 'circle' | 'triangle';
 export type DrawingMode = 'brush' | 'shape';

@@ -17,57 +17,72 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-var clients = make(map[*websocket.Conn]int)         // Connected clients
-var clientColors = make(map[*websocket.Conn]string) // Colors for each client
-var userCount = 0                                   // Total number of connected users
-var broadcast = make(chan []byte)                   // Channel to broadcast messages
-var mu sync.Mutex                                   // Mutex to protect shared data
+var clients = make(map[*websocket.Conn]int)
+var clientColors = make(map[*websocket.Conn]string)
+var userCount = 0
+var broadcast = make(chan []byte)
+var mu sync.Mutex
 
 var colors = []string{
 	"#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16",
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
-	ws, err := upgrader.Upgrade(w, r, nil) // Upgrade HTTP connection to WebSocket
+	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Error upgrading connection:", err)
 		return
 	}
-	defer ws.Close() // Ensure the connection is closed when the function exits
+	defer ws.Close()
 
 	mu.Lock()
-	userCount++                                      // Increment user count
-	clients[ws] = len(clients) + 1                   // Add new client to the map
-	clientColors[ws] = colors[userCount%len(colors)] // Assign a color to the client
-	broadcastUserCount()                             // Broadcast the initial user count
+	userCount++
+	clients[ws] = len(clients) + 1
+	clientColors[ws] = colors[userCount%len(colors)]
+	broadcastUserCount()
 	mu.Unlock()
 
 	for {
-		_, msg, err := ws.ReadMessage() // Read message from client
+		_, msg, err := ws.ReadMessage()
 		if err != nil {
 			log.Println("Error reading message:", err)
 			mu.Lock()
-			delete(clients, ws)      // Remove client if there's an error
-			delete(clientColors, ws) // Remove client's color
-			broadcastUserCount()     // Broadcast updated user count
+			delete(clients, ws)
+			delete(clientColors, ws)
+			broadcastUserCount()
 			mu.Unlock()
 			break
 		}
+
 		var payload map[string]interface{}
-		err = json.Unmarshal(msg, &payload) // Unmarshal the message into a map
+		err = json.Unmarshal(msg, &payload)
 		if err != nil {
 			log.Println("Invalid JSON payload:", err)
 			continue
 		}
 
-		if payload["type"] == "chat" {
-			payload["username"] = fmt.Sprintf("User %d", clients[ws]) // Default username if not provided
-			payload["userColor"] = clientColors[ws]                   // Get the client's color
-			payload["timestamp"] = time.Now().UnixMilli()             // Add timestamp
-			msg, _ = json.Marshal(payload)                            // Convert payload to JSON
+		log.Println("Incoming raw payload:", payload)
+
+		switch payload["type"] {
+		case "chat":
+			payload["username"] = fmt.Sprintf("User %d", clients[ws])
+			payload["userColor"] = clientColors[ws]
+			payload["timestamp"] = time.Now().UnixMilli()
+			msg, _ = json.Marshal(payload)
+
+		case "draw", "shape":
+			log.Println("Received draw/shape message:", payload)
+			msg, err = json.Marshal(payload)
+			if err != nil {
+				log.Println("Error marshaling payload:", err)
+				continue
+			}
+		default:
+			log.Println("Unknown message type:", payload["type"])
+			continue
 		}
 
-		broadcast <- msg // Send the message to the broadcast channel
+		broadcast <- msg
 	}
 }
 
@@ -77,41 +92,39 @@ func broadcastUserCount() {
 		"type":  "user_count",
 		"count": count,
 	}
-	data, _ := json.Marshal(msg) // Convert message to JSON
+	data, _ := json.Marshal(msg)
 	for client := range clients {
-		client.WriteMessage(websocket.TextMessage, data) // Send user count to each client
+		client.WriteMessage(websocket.TextMessage, data)
 	}
 }
 
 func handleMessages() {
 	for {
-		msg := <-broadcast // Wait for a message to broadcast
+		msg := <-broadcast
+
+		mu.Lock()
 		for client := range clients {
-			err := client.WriteMessage(websocket.TextMessage, msg) // Send message to each client
+			err := client.WriteMessage(websocket.TextMessage, msg)
 			if err != nil {
 				log.Println("Error writing message:", err)
-				client.Close()          // Close the connection if there's an error
-				delete(clients, client) // Remove the client from the map
-				mu.Lock()
-				delete(clientColors, client) // Remove client's color
-				broadcastUserCount()         // Broadcast updated user count
-				mu.Unlock()
+				client.Close()
+				delete(clients, client)
+				delete(clientColors, client)
 			}
 		}
+		mu.Unlock()
+
+		log.Println("Broadcasting message:", string(msg))
+		broadcastUserCount()
 	}
 }
 
-func jsonNow() int64 {
-	return time.Now().Unix()
-}
-
 func main() {
-	http.HandleFunc("/ws", handleConnections) // Set up WebSocket endpoint
-
-	go handleMessages() // Start the message handler in a goroutine
+	http.HandleFunc("/ws", handleConnections)
+	go handleMessages()
 
 	fmt.Println("Server started on :8080")
-	err := http.ListenAndServe(":8080", nil) // Start the server
+	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		log.Fatal("ListenAndServe:", err)
 	}

@@ -64,7 +64,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               setDrawingMode('brush');
             }}
             className={`p-2 rounded-md border ${
-              brushStyle === style.id ? 'bg-blue-600' : 'bg-gray-800'
+              drawingMode === 'brush' && brushStyle === style.id
+                ? 'bg-blue-600'
+                : 'bg-gray-800'
             }`}
             title={style.name}
           >
