@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import { drawShape, clearPreviewCanvas } from '../lib/Utils';
+import { drawShape} from '../lib/Utils';
 import { DrawingState, BrushStyle, DrawingMode, ShapeType } from '../lib/Types';
 
 interface CanvasProps {
@@ -24,7 +24,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     socketRef,
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+    const snapshotRef = useRef<ImageData | null>(null);
 
     const getCanvasPosition = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current;
@@ -39,10 +39,18 @@ export const Canvas: React.FC<CanvasProps> = ({
         };
     }, []);
 
-
-
     const startDrawing = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
         const { x, y } = getCanvasPosition(e);
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        if (drawingMode === 'shape') {
+            // Take a snapshot of current canvas state
+            snapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        }
+
         setDrawingState({
             isDrawing: true,
             lastX: x,
@@ -50,22 +58,21 @@ export const Canvas: React.FC<CanvasProps> = ({
             startX: x,
             startY: y,
         });
-    }, [getCanvasPosition, setDrawingState]);
+    }, [getCanvasPosition, drawingMode, setDrawingState]);
 
     const draw = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
         if (!drawingState.isDrawing) return;
-
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext('2d');
-        const previewCanvas = previewCanvasRef.current;
-        const previewCtx = previewCanvas?.getContext('2d');
-        if (!ctx || !previewCtx) return;
+        if (!ctx) return;
 
         const { x, y } = getCanvasPosition(e);
 
         if (drawingMode === 'shape') {
-            clearPreviewCanvas(previewCtx, previewCanvas!);
-            drawShape(previewCtx, drawingState.startX, drawingState.startY, x, y, selectedShape, penColor, penSize);
+            if (snapshotRef.current) {
+                ctx.putImageData(snapshotRef.current, 0, 0);
+            }
+            drawShape(ctx, drawingState.startX, drawingState.startY, x, y, selectedShape, penColor, penSize);
         } else {
             ctx.globalAlpha = 1;
             ctx.globalCompositeOperation = 'source-over';
@@ -99,15 +106,17 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     const stopDrawing = useCallback((e?: React.MouseEvent<HTMLCanvasElement>) => {
         if (!drawingState.isDrawing) return;
+        if (!e) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas?.getContext('2d');
+        if (!ctx || !canvas) return;
+
+        const { x, y } = getCanvasPosition(e);
 
         if (drawingMode === 'shape' && e) {
-            const canvas = canvasRef.current;
-            const ctx = canvas?.getContext('2d');
-            if (!ctx) return;
-
-            const { x, y } = getCanvasPosition(e);
+            ctx.restore();
             drawShape(ctx, drawingState.startX, drawingState.startY, x, y, selectedShape, penColor, penSize);
-            clearPreviewCanvas(ctx, canvas!);
         }
 
         setDrawingState(prev => ({ ...prev, isDrawing: false }));
@@ -115,30 +124,23 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     useEffect(() => {
         const canvas = canvasRef.current;
-        const preview = previewCanvasRef.current;
-        if (!canvas || !preview) return;
+        if (!canvas) return;
 
         const rect = canvas.getBoundingClientRect();
         const width = rect.width;
         const height = rect.height;
         const dpr = window.devicePixelRatio || 1;
 
-        [canvas, preview].forEach(c => {
-            c.width = width * dpr;
-            c.height = height * dpr;
-            c.style.width = `${width}px`;
-            c.style.height = `${height}px`;
-
-            const ctx = c.getContext('2d');
-            if (ctx) {
-                ctx.scale(dpr, dpr);
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-            }
-        });
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
 
         const ctx = canvas.getContext('2d');
         if (ctx) {
+            ctx.scale(dpr, dpr);
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
             ctx.fillStyle = '#FFFFFF';
             ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
         }
@@ -147,10 +149,6 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     return (
         <div className="w-full h-full relative bg-white rounded-lg overflow-hidden border border-gray-200">
-            <canvas
-                ref={previewCanvasRef}
-                className="absolute inset-0 w-full h-full pointer-events-none"
-            />
             <canvas
                 ref={canvasRef}
                 className="absolute inset-0 w-full h-full cursor-crosshair"
