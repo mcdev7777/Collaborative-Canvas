@@ -37,7 +37,7 @@ export const Chat: React.FC<ChatProps> = ({
   }, [messages]);
 
   return (
-    <div className="w-full lg:w-80 flex flex-col bg-[#1a1f2a] rounded-lg border border-gray-800 overflow-hidden">
+    <div className="flex flex-col h-full w-full min-w-[300px] max-w-[400px] bg-[#1a1f2a] rounded-lg border border-gray-800 overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b border-gray-700 bg-[#101521]">
         <h3 className="text-white font-semibold text-lg">Team Chat</h3>
@@ -45,7 +45,7 @@ export const Chat: React.FC<ChatProps> = ({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-64 lg:max-h-none scrollbar-thin">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin min-h-0">
         {messages.map((message) => (
           <div
             key={message.id}

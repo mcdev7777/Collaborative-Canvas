@@ -106,7 +106,7 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ setOnlineCount }) => {
         clearCanvas={clearCanvas}
       />
 
-      <div className="flex-1 flex flex-col lg:flex-row gap-4">
+      <div className="flex flex-1 lg:flex-row gap-4 min-h-0 overflow-hidden h-full">
         <div className="flex-1">
           <Canvas
             penColor={penColor}
