@@ -144,7 +144,7 @@ export const Whiteboard: React.FC<WhiteBoardProps> = ({ setOnlineCount }) => {
   }, [penColor]);
 
   useEffect(() => {
-    const socket = new WebSocket('ws://localhost:8080/ws'); // Replace with the WebSocket server URL
+    const socket = new WebSocket('wss://canvas-backend-955998363646.us-central1.run.app/ws');
     socketRef.current = socket;
 
     socket.onopen = () => {
