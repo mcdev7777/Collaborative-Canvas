@@ -27,6 +27,7 @@ export const Whiteboard: React.FC = () => {
   const highlighterCanvasRef = useRef<HTMLCanvasElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const colorInputRef = useRef<HTMLInputElement>(null);
+  const socketRef = useRef<WebSocket | null>(null);
   
   const [drawingState, setDrawingState] = useState<DrawingState>({
     isDrawing: false,
@@ -164,6 +165,45 @@ export const Whiteboard: React.FC = () => {
     setCustomColor(penColor);
   }, [penColor]);
 
+  useEffect(() => {
+    const socket = new WebSocket('ws://localhost:8080/ws'); // Replace with the WebSocket server URL
+    socketRef.current = socket;
+
+    socket.onopen = () => {
+      console.log('WebSocket connection established');
+    };
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.type !== 'draw') return;
+
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (!ctx) return;
+
+      ctx.strokeStyle = data.color;
+      ctx.lineWidth = data.size;
+      ctx.beginPath();
+      ctx.moveTo(data.x1, data.y1);
+      ctx.lineTo(data.x2, data.y2);
+      ctx.stroke();
+    };
+
+    socket.onclose = () => {
+      console.log('WebSocket connection closed');
+    };
+
+    socket.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    return () => {
+      socket.close();
+    };
+
+  }, []);
+
   const getCanvasPosition = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -293,6 +333,17 @@ export const Whiteboard: React.FC = () => {
         ctx.moveTo(drawingState.lastX, drawingState.lastY);
         ctx.lineTo(x, y);
         ctx.stroke();
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+              socketRef.current.send(JSON.stringify({
+                type: 'draw',
+                x1: drawingState.lastX,
+                y1: drawingState.lastY,
+                x2: x,
+                y2: y,
+                color: penColor,
+                size: penSize,
+              }));
+            }
       }
 
       setDrawingState(prev => ({
